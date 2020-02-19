@@ -47,7 +47,7 @@
 #define SAMPLE_RANGE 10
 #define MAX_FILE_NAME_LENGTH 100
 #define MU_0 1.25663706212e-6 /*units of H/m*/
-#define K_B 1.380649e-23 /*unita od J/K*/
+#define K_B 1.380649e-23 /*units of J/K*/
 #define xfree(mem) { free( mem ); mem = NULL; } //checks if free is successful
 #define S(i,j) (spin[((Quantities->array_size+(i))%Quantities->array_size)*Quantities->array_size+((Quantities->array_size+(j))%Quantities->array_size)])/* Makes referring to the array simpler and also deals
                                     with the periodic BCs required to simulate an infinite lattice
@@ -96,7 +96,7 @@ static long checked_strtol(const char *string);
 static Error populate_array(int *spin, quantities * Quantities, gsl_rng *r, char * initial_array_filename);
 static double calculate_energy (int *spin, quantities * Quantities);
 static double calculate_energy_change (int *spin, quantities * Quantities, unsigned long i, unsigned long j);
-static Error metropolis_implementation (int *spin,int *has_been_checked, quantities * Quantities, gsl_rng * rng_struct, char * energy_filename);
+static Error metropolis_implementation (int *spin/*,int *has_been_checked*/, quantities * Quantities, gsl_rng * rng_struct, char * energy_filename);
 static Error calculate_average_energy (quantities * Quantities, int rolling_count, int count);
 static Error calculate_heat_capacity(quantities * Quantities);
 static double calculate_magnetisation(int *spin, quantities * Quantities);
@@ -189,12 +189,12 @@ int main(int argc, char ** argv) {
         c = getopt_long( argc, argv, ":d:j:b:t:i:f:o:e:", long_options, &option_index );
     }
     int *spin = xmalloc(sizeof(int)*Quantities->array_size*Quantities->array_size);
-    int *has_been_checked = xmalloc(sizeof(int)*Quantities->array_size*Quantities->array_size);
+    
     populate_array(spin, Quantities, random_num_gen_struct, final_file_name_2);
 
     Quantities->total_energy = calculate_energy(spin, Quantities);
 
-    metropolis_implementation(spin,has_been_checked, Quantities, random_num_gen_struct, energy_file_name);
+    metropolis_implementation(spin/*,has_been_checked*/, Quantities, random_num_gen_struct, energy_file_name);
     FILE * final = fopen(final_file_name_2, "w");
     if (final == NULL) {
         printf("Error opening file\n");
@@ -210,7 +210,7 @@ int main(int argc, char ** argv) {
     fclose(final);
     xfree(spin);
     xfree(Quantities);
-    xfree(has_been_checked)
+    //xfree(has_been_checked);
 
     gsl_rng_free(random_num_gen_struct);
 
@@ -308,7 +308,7 @@ static double calculate_energy_change (int *spin, quantities * Quantities, unsig
 
 //This function implements the metropolis algorithm to evolve the system and also is responsible at present for
 // calculating the energy fluctuations at ten step intervals
-static Error metropolis_implementation (int *spin,int *has_been_checked, quantities * Quantities, gsl_rng * rng_struct, char * energy_filename){
+static Error metropolis_implementation (int *spin/*,int *has_been_checked*/, quantities * Quantities, gsl_rng * rng_struct, char * energy_filename){
     unsigned long i=0, j=0;
     int rolling_count =0;
     int count =0;
@@ -316,7 +316,8 @@ static Error metropolis_implementation (int *spin,int *has_been_checked, quantit
     long double energy_change=0;
     double random=0;
     int array_counter =0;
-    //memset(has_been_checked, 0, sizeof(int)*Quantities->array_size*Quantities->array_size);
+    int *has_been_checked = xmalloc(sizeof(int)*Quantities->array_size*Quantities->array_size);
+    memset(has_been_checked, 0, sizeof(int)*Quantities->array_size*Quantities->array_size);
     FILE * energy = fopen(energy_filename, "w");
     if (energy == NULL) {
            printf("Error opening file\n");
@@ -331,7 +332,7 @@ static Error metropolis_implementation (int *spin,int *has_been_checked, quantit
 
         //if (count%10 == 0) {
         array_counter = 0;
-        //memset(has_been_checked, 0, sizeof(bool)*Quantities->array_size*Quantities->array_size);
+        memset(has_been_checked, 0, sizeof(bool)*Quantities->array_size*Quantities->array_size);
         Quantities->total_energy = calculate_energy(spin, Quantities);
         Quantities->magnetisation = calculate_magnetisation(spin, Quantities);
         calculate_average_energy(Quantities, rolling_count, count);
@@ -341,7 +342,7 @@ static Error metropolis_implementation (int *spin,int *has_been_checked, quantit
             rolling_count =0;
         }
         //}
-        //ensures that a random sample equal to the size of array is simulated
+        //ensures that each spin is sampled every iteration
         while (array_counter<(Quantities->array_size*Quantities->array_size)) {
             i = gsl_rng_uniform_int(rng_struct, Quantities->array_size);
             j = gsl_rng_uniform_int(rng_struct, Quantities->array_size);
@@ -385,6 +386,7 @@ static Error metropolis_implementation (int *spin,int *has_been_checked, quantit
         printf("%d\n", count);
     }
     fclose(energy);
+    xfree(has_been_checked);
     return NO_ERROR;
 }
 //calculates a running average energy over the previous 10 energy values
